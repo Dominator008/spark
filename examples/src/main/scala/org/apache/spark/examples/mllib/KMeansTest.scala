@@ -11,6 +11,7 @@ object KMeansTest {
   def main(args: Array[String]) {
 
     val conf = new SparkConf().setAppName("Simple Application")
+        .set("spark.executor.extraJavaOptions", "-XX:+PrintGC")
     val sc = new SparkContext(conf)
 
     // Load and parse the data
@@ -19,7 +20,7 @@ object KMeansTest {
     val parsedData = data.map(s => Vectors.dense(s.split(' ').map(_.toDouble))).cache()
 
     // Cluster the data into two classes using KMeans
-    val numClusters = 2
+    val numClusters = 3000
     val numIterations = 20
     val clusters = KMeans.train(parsedData, numClusters, numIterations)
 

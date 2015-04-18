@@ -17,31 +17,27 @@
 
 package org.apache.spark.rdd
 
+import java.lang.management.ManagementFactory
 import java.util.Random
 
-import scala.collection.{mutable, Map}
-import scala.collection.mutable.ArrayBuffer
-import scala.language.implicitConversions
-import scala.reflect.{classTag, ClassTag}
-
 import com.clearspring.analytics.stream.cardinality.HyperLogLogPlus
-import org.apache.hadoop.io.{Writable, BytesWritable, NullWritable, Text}
 import org.apache.hadoop.io.compress.CompressionCodec
+import org.apache.hadoop.io.{BytesWritable, NullWritable, Text}
 import org.apache.hadoop.mapred.TextOutputFormat
-
-import org.apache.spark._
 import org.apache.spark.Partitioner._
+import org.apache.spark._
 import org.apache.spark.annotation.{DeveloperApi, Experimental}
 import org.apache.spark.api.java.JavaRDD
-import org.apache.spark.partial.BoundedDouble
-import org.apache.spark.partial.CountEvaluator
-import org.apache.spark.partial.GroupedCountEvaluator
-import org.apache.spark.partial.PartialResult
+import org.apache.spark.partial.{BoundedDouble, CountEvaluator, GroupedCountEvaluator, PartialResult}
 import org.apache.spark.storage.StorageLevel
-import org.apache.spark.util.{BoundedPriorityQueue, Utils}
 import org.apache.spark.util.collection.OpenHashMap
-import org.apache.spark.util.random.{BernoulliSampler, PoissonSampler, BernoulliCellSampler,
-  SamplingUtils}
+import org.apache.spark.util.random.{BernoulliCellSampler, BernoulliSampler, PoissonSampler, SamplingUtils}
+import org.apache.spark.util.{BoundedPriorityQueue, Utils}
+
+import scala.collection.mutable.ArrayBuffer
+import scala.collection.{Map, mutable}
+import scala.language.implicitConversions
+import scala.reflect.{ClassTag, classTag}
 
 /**
  * A Resilient Distributed Dataset (RDD), the basic abstraction in Spark. Represents an immutable,
@@ -279,12 +275,35 @@ abstract class RDD[T: ClassTag](
 
   // Transformations (return a new RDD)
 
+  def printMemoryUsage() {
+    // Retrieve memory managed bean from management factory.
+    val memBean = ManagementFactory.getMemoryMXBean()
+    val heap = memBean.getHeapMemoryUsage()
+    val nonHeap = memBean.getNonHeapMemoryUsage()
+    // Retrieve the four values stored within MemoryUsage:
+    // init: Amount of memory in bytes that the JVM initially requests from the OS.
+    // used: Amount of memory used.
+    // committed: Amount of memory that is committed for the JVM to use.
+    // max: Maximum amount of memory that can be used for memory management.
+    logWarning("Heap: Init: %d, Used: %d, Committed: %d, Max: %d".format(
+        heap.getInit(), heap.getUsed(), heap.getCommitted(), heap.getMax()))
+    logWarning("nonHeap: Init: %d, Used: %d, Committed: %d, Max: %d".format(
+        nonHeap.getInit(), nonHeap.getUsed(), nonHeap.getCommitted(), nonHeap.getMax()))
+  }
+
   /**
    * Return a new RDD by applying a function to all elements of this RDD.
    */
   def map[U: ClassTag](f: T => U): RDD[U] = {
     val cleanF = sc.clean(f)
-    new MapPartitionsRDD[U, T](this, (context, pid, iter) => iter.map(cleanF))
+    new MapPartitionsRDD[U, T](this, (context, pid, iter) => {
+      logWarning(s"$pid Before")
+      printMemoryUsage()
+      val result = iter.map(cleanF)
+      logWarning(s"$pid After")
+      printMemoryUsage()
+      result
+    })
   }
 
   /**
