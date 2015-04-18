@@ -13,12 +13,12 @@ object KMeansTest {
 
 	// Load and parse the data
 	//val data = sc.textFile("/Users/yunmingzhang/Documents/Research/spark/data/mllib/kmeans_data.txt")
-	val data = sc.textFile("../../data/mllib/kmeans_data.txt")
+	val data = sc.textFile("./data/mllib/kmeans_data.txt")
 	val parsedData = data.map(s => Vectors.dense(s.split(' ').map(_.toDouble))).cache()
 
 	// Cluster the data into two classes using KMeans
-	val numClusters = 2
-	val numIterations = 20
+	val numClusters = 3000
+	val numIterations = 2000
 	val clusters = KMeans.train(parsedData, numClusters, numIterations)
 
 	// Evaluate clustering by computing Within Set Sum of Squared Errors

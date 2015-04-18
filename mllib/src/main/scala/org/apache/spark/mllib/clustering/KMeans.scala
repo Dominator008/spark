@@ -189,6 +189,8 @@ class KMeans private (
    */
   private def runAlgorithm(data: RDD[VectorWithNorm]): KMeansModel = {
 
+    logInfo("Running My Own KMeans !!!!!!!!!!!!!!!!!!!!!!!!!")
+
     val sc = data.sparkContext
 
     val initStartTime = System.nanoTime()
