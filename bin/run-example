@@ -61,13 +61,15 @@ fi
 
 export SPARK_EXAMPLES_JAR
 
-EXAMPLE_MASTER=${MASTER:-"local[*]"}
+#EXAMPLE_MASTER=${MASTER:-"local[*]"}
+EXAMPLE_MASTER=${MASTER:-"local[2]"}
 
 if [[ ! $EXAMPLE_CLASS == org.apache.spark.examples* ]]; then
   EXAMPLE_CLASS="org.apache.spark.examples.$EXAMPLE_CLASS"
 fi
 
 exec "$FWDIR"/bin/spark-submit \
+  --driver-memory 4g       \
   --master $EXAMPLE_MASTER \
   --class $EXAMPLE_CLASS \
   "$SPARK_EXAMPLES_JAR" \

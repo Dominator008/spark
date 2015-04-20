@@ -13,7 +13,8 @@ object KMeansTest {
     case class Params (
         k: Int = 30,
         numIterations: Int = 10,
-        heapSize: Int = 8) extends AbstractParams[Params]
+        heapSize: Int = 8,
+        numSlices: Int = 16) extends AbstractParams[Params]
     
 
 
@@ -33,7 +34,11 @@ object KMeansTest {
             .action((x, c) => c.copy(numIterations = x))
           opt[Int]("heapSize")
             .required()
-            .text(s"head size (GB), required")
+            .text(s"heap size (GB), required")
+            .action((x, c) => c.copy(heapSize = x))
+          opt[Int]("numSlices")
+            .required()
+            .text(s"hnumSlices, required")
             .action((x, c) => c.copy(heapSize = x))
         }
 
@@ -49,9 +54,12 @@ object KMeansTest {
     def run(params: Params) {
 
 
-        val conf = new SparkConf().setAppName("KMeans")
-            .set("spark.executor.extraJavaOptions", "-XX:+PrintGC")
+        val conf = new SparkConf()
+            .setAppName("KMeansTest")
+            //.set("spark.executor.extraJavaOptions", "-XX:+PrintGC")
             .set("spark.executor.memory", params.heapSize + "g")
+
+
         val sc = new SparkContext(conf)
         // Load and parse the data
         //val data = sc.textFile("/Users/yunmingzhang/Documents/Research/spark/data/mllib/kmeans_data.txt")
@@ -70,11 +78,12 @@ object KMeansTest {
             sparseVectorList += sparseVector
         }
 
-        val sparseVectorListRDD = sc.parallelize(sparseVectorList).cache()
+        val sparseVectorListRDD = sc.parallelize(sparseVectorList, params.numSlices)
         val clusters = KMeans.train(sparseVectorListRDD, params.k, params.numIterations)
 
-        // Evaluate clustering by computing Within Set Sum of Squared Errors
-        val WSSSE = clusters.computeCost(sparseVectorListRDD)
-        println("Within Set Sum of Squared Errors = " + WSSSE)
+        //This part becomes reallly slow when number of clusters is large
+        // // Evaluate clustering by computing Within Set Sum of Squared Errors
+        // val WSSSE = clusters.computeCost(sparseVectorListRDD)
+        // println("Within Set Sum of Squared Errors = " + WSSSE)
     }
 }
