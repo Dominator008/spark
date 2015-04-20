@@ -6,43 +6,75 @@ import org.apache.spark.SparkContext
 import org.apache.spark.SparkContext._
 import org.apache.spark.SparkConf
 import scala.io.Source._
+import scopt.OptionParser
 
 object KMeansTest {
 
-  def main(args: Array[String]) {
+    case class Params (
+        k: Int = 30,
+        numIterations: Int = 10,
+        heapSize: Int = 8) extends AbstractParams[Params]
+    
 
-    val conf = new SparkConf().setAppName("KMeans")
-        .set("spark.executor.extraJavaOptions", "-XX:+PrintGC")
-    val sc = new SparkContext(conf)
 
-    // Load and parse the data
-    //val data = sc.textFile("/Users/yunmingzhang/Documents/Research/spark/data/mllib/kmeans_data.txt")
-    // val data = sc.textFile("data/mllib/kmeans_data.txt")
-    // val parsedData = data.map(s => Vectors.dense(s.split(' ').map(_.toDouble))).cache()
+    def main(args: Array[String]) {
 
-    val indexLines = fromFile("data/mllib/kmeans_index.txt").getLines
-    val valLines = fromFile("data/mllib/kmeans_val.txt").getLines
-    val sparseVectorList = scala.collection.mutable.Buffer[org.apache.spark.mllib.linalg.Vector]()
-    val length = 15000 //number of unique words, hard coded length of the sparse vector
+        
+        val defaultParams = Params()
+        val parser = new OptionParser[Params]("KMeansTest") {
+          head("KMeansTest: an example k-means app for dense data.")
+          opt[Int]('k', "k")
+            .required()
+            .text(s"number of clusters, required")
+            .action((x, c) => c.copy(k = x))
+          opt[Int]("numIterations")
+            .required()
+            .text(s"number of iterations, default: ${defaultParams.numIterations}")
+            .action((x, c) => c.copy(numIterations = x))
+          opt[Int]("heapSize")
+            .required()
+            .text(s"head size (GB), required")
+            .action((x, c) => c.copy(heapSize = x))
+        }
 
-    while (indexLines.hasNext) {
-        val indexArray = indexLines.next().split(' ').map(_.toInt)
-        val valArray = valLines.next().split(' ').map(_.toDouble)
-        val sparseVector = Vectors.sparse(length, indexArray, valArray)
-        sparseVectorList += sparseVector
+         parser.parse(args, defaultParams).map { params =>
+          run(params)
+        }.getOrElse {
+          sys.exit(1)
+        }
+
+
     }
 
-    val sparseVectorListRDD = sc.parallelize(sparseVectorList)
+    def run(params: Params) {
 
-    // Cluster the data into two classes using KMeans
-    val numClusters = 30
-    val numIterations = 40
 
-    val clusters = KMeans.train(sparseVectorListRDD, numClusters, numIterations)
+        val conf = new SparkConf().setAppName("KMeans")
+            .set("spark.executor.extraJavaOptions", "-XX:+PrintGC")
+            .set("spark.executor.memory", params.heapSize + "g")
+        val sc = new SparkContext(conf)
+        // Load and parse the data
+        //val data = sc.textFile("/Users/yunmingzhang/Documents/Research/spark/data/mllib/kmeans_data.txt")
+        // val data = sc.textFile("data/mllib/kmeans_data.txt")
+        // val parsedData = data.map(s => Vectors.dense(s.split(' ').map(_.toDouble))).cache()
 
-    // Evaluate clustering by computing Within Set Sum of Squared Errors
-    val WSSSE = clusters.computeCost(sparseVectorListRDD)
-    println("Within Set Sum of Squared Errors = " + WSSSE)
+        val indexLines = fromFile("data/mllib/kmeans_index.txt").getLines
+        val valLines = fromFile("data/mllib/kmeans_val.txt").getLines
+        val sparseVectorList = scala.collection.mutable.Buffer[org.apache.spark.mllib.linalg.Vector]()
+        val length = 15000 //number of unique words, hard coded length of the sparse vector
 
+        while (indexLines.hasNext) {
+            val indexArray = indexLines.next().split(' ').map(_.toInt)
+            val valArray = valLines.next().split(' ').map(_.toDouble)
+            val sparseVector = Vectors.sparse(length, indexArray, valArray)
+            sparseVectorList += sparseVector
+        }
+
+        val sparseVectorListRDD = sc.parallelize(sparseVectorList).cache()
+        val clusters = KMeans.train(sparseVectorListRDD, params.k, params.numIterations)
+
+        // Evaluate clustering by computing Within Set Sum of Squared Errors
+        val WSSSE = clusters.computeCost(sparseVectorListRDD)
+        println("Within Set Sum of Squared Errors = " + WSSSE)
     }
 }
