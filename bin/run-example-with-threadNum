@@ -27,10 +27,12 @@ EXAMPLES_DIR="$FWDIR"/examples
 if [ -n "$1" ]; then
   NUM_THREADS="$1"
   echo "local[$NUM_THREADS]"
+  shift
 fi
 
-if [ -n "$2" ]; then
-  EXAMPLE_CLASS="$2"
+if [ -n "$1" ]; then
+  echo $1
+  EXAMPLE_CLASS="$1"
   shift
 else
   echo "Usage: ./bin/run-example <example-class> [example-args]" 1>&2

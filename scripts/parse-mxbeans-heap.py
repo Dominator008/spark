@@ -17,7 +17,7 @@ for line in lines:
             #print line[i+4]                                                    
             HeapMemList.append(int(line[i+8]))
         if line[i] == 'Iterations' and line[i+1] == 'took':
-            print line
+            #print line
             Time = (line[i+2])
         if line[i] == 'finished' and line[i+1] == 'in' and line[i+3] == 'iterations':
             print line
