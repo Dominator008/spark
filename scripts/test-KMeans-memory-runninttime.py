@@ -16,4 +16,5 @@ def test(numThreadsArray, numClustersArray):
             os.system(commandLineStr)
             os.system("python ./scripts/parse-mxbeans-heap.py " + outputFileName + ">>" + finalOutputFile)
 
-test([1, 2, 4, 8, 12], [1000, 1500, 2000])
+#test([1, 2, 4, 8, 12], [1000, 1500, 2000])
+test([2], [1500])

@@ -38,8 +38,8 @@ object KMeansTest {
             .action((x, c) => c.copy(heapSize = x))
           opt[Int]("numSlices")
             .required()
-            .text(s"hnumSlices, required")
-            .action((x, c) => c.copy(heapSize = x))
+            .text(s"numSlices, required")
+            .action((x, c) => c.copy(numSlices = x))
         }
 
          parser.parse(args, defaultParams).map { params =>
@@ -78,7 +78,9 @@ object KMeansTest {
             sparseVectorList += sparseVector
         }
 
-        val sparseVectorListRDD = sc.parallelize(sparseVectorList, params.numSlices)
+        val sparseVectorListRDD = sc.parallelize(sparseVectorList, params.numSlices).cache()
+        println(sparseVectorListRDD.partitions.size)
+        println(params.numSlices)
         val clusters = KMeans.train(sparseVectorListRDD, params.k, params.numIterations, 1, KMeans.RANDOM)
 
         //This part becomes reallly slow when number of clusters is large
