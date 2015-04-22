@@ -18,10 +18,10 @@ def test(numThreadsArray, numClustersArray, numSlicesArray):
         #os.system("echo " + str(numThread))          
                 os.system("echo " + str(numClusters) + " clusters, " + str(numThread) + " threads, " + str(numSlices) + " slices >> " + finalOutputFile)  
                 outputFileName = outputdir + "log-" + str(numThread) + "-" + str(numClusters) + "-" + str(numSlices)
-                commandLineStr = "bin/run-example-with-threadNum " + str(numThread) + " org.apache.spark.examples.mllib.KMeansTest -k " + str(numClusters) + " --numIterations 15 --heapSize 5 --numSlices "+ str(numSlices) + " 2>>" + outputFileName
+                commandLineStr = "bin/run-example-with-threadNum " + str(numThread) + " org.apache.spark.examples.mllib.KMeansTest -k " + str(numClusters) + " --numIterations 10 --heapSize 5 --numSlices "+ str(numSlices) + " 2>>" + outputFileName
                 print commandLineStr
                 os.system(commandLineStr)
                 os.system("python ./scripts/parse-mxbeans-heap.py " + outputFileName + ">>" + finalOutputFile)
 
 #test([1, 2, 4, 8, 12], [1000, 1500, 2000])
-test([2, 4, 6], [2500, 3000, 4000, 5000], [4, 6, 12])
+test([2, 4, 6], [1000, 2000], [6,8])

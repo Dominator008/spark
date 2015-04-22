@@ -19,6 +19,7 @@ package org.apache.spark.rdd
 
 import java.lang.management.ManagementFactory
 import java.util.Random
+import java.lang.System
 
 import com.clearspring.analytics.stream.cardinality.HyperLogLogPlus
 import org.apache.hadoop.io.compress.CompressionCodec
@@ -276,6 +277,7 @@ abstract class RDD[T: ClassTag](
   // Transformations (return a new RDD)
 
   def printMemoryUsage() {
+    System.gc()
     // Retrieve memory managed bean from management factory.
     val memBean = ManagementFactory.getMemoryMXBean()
     val heap = memBean.getHeapMemoryUsage()
@@ -289,6 +291,7 @@ abstract class RDD[T: ClassTag](
         heap.getInit(), heap.getUsed(), heap.getCommitted(), heap.getMax()))
     logWarning("nonHeap: Init: %d, Used: %d, Committed: %d, Max: %d".format(
         nonHeap.getInit(), nonHeap.getUsed(), nonHeap.getCommitted(), nonHeap.getMax()))
+    System.gc()
   }
 
   /**
