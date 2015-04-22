@@ -81,7 +81,7 @@ object KMeansTest {
         val sparseVectorListRDD = sc.parallelize(sparseVectorList, params.numSlices).cache()
         println(sparseVectorListRDD.partitions.size)
         println(params.numSlices)
-        val clusters = KMeans.train(sparseVectorListRDD, params.k, params.numIterations, 1, KMeans.RANDOM)
+        val clusters = KMeans.trainParallel(sparseVectorListRDD, params.k, params.numIterations, 1, KMeans.RANDOM)
 
         //This part becomes reallly slow when number of clusters is large
         // // Evaluate clustering by computing Within Set Sum of Squared Errors

@@ -184,6 +184,35 @@ class KMeans private (
     model
   }
 
+
+  /**
+   * Train a K-means model on the given set of points; `data` should be cached for high
+   * performance, because this is an iterative algorithm.
+   */
+  def runParallel(data: RDD[Vector]): KMeansModel = {
+
+    if (data.getStorageLevel == StorageLevel.NONE) {
+      logWarning("The input data is not directly cached, which may hurt performance if its"
+        + " parent RDDs are also uncached.")
+    }
+
+    // Compute squared norms and cache them.
+    val norms = data.map(Vectors.norm(_, 2.0))
+    norms.persist()
+    val zippedData = data.zip(norms).map { case (v, norm) =>
+      new VectorWithNorm(v, norm)
+    }
+    val model = runParallelAlgorithm(zippedData)
+    norms.unpersist()
+
+    // Warn at the end of the run as well, for increased visibility.
+    if (data.getStorageLevel == StorageLevel.NONE) {
+      logWarning("The input data was not directly cached, which may hurt performance if its"
+        + " parent RDDs are also uncached.")
+    }
+    model
+  }
+
   /**
    * Implementation of K-Means algorithm.
    */
@@ -294,6 +323,121 @@ class KMeans private (
 
     new KMeansModel(centers(bestRun).map(_.vector))
   }
+
+
+  /**
+   * Implementation of K-Means algorithm.
+   */
+  private def runParallelAlgorithm(data: RDD[VectorWithNorm]): KMeansModel = {
+
+    logInfo("Running Parallel KMeans !!!!!!!!!!!!!!!!!!!!!!!!!")
+
+    val sc = data.sparkContext
+
+    val initStartTime = System.nanoTime()
+
+    val centers = if (initializationMode == KMeans.RANDOM) {
+      initRandom(data)
+    } else {
+      initKMeansParallel(data)
+    }
+
+    val initTimeInSeconds = (System.nanoTime() - initStartTime) / 1e9
+    logInfo(s"Initialization with $initializationMode took " + "%.3f".format(initTimeInSeconds) +
+      " seconds.")
+
+    val active = Array.fill(runs)(true)
+    val costs = Array.fill(runs)(0.0)
+
+    var activeRuns = new ArrayBuffer[Int] ++ (0 until runs)
+    var iteration = 0
+
+    val iterationStartTime = System.nanoTime()
+
+    // Execute iterations of Lloyd's algorithm until all runs have converged
+    while (iteration < maxIterations && !activeRuns.isEmpty) {
+      type WeightedPoint = (Vector, Long)
+      def mergeContribs(x: WeightedPoint, y: WeightedPoint): WeightedPoint = {
+        axpy(1.0, x._1, y._1)
+        (y._1, x._2 + y._2)
+      }
+
+      val activeCenters = activeRuns.map(r => centers(r)).toArray
+      val costAccums = activeRuns.map(_ => sc.accumulator(0.0))
+
+      val bcActiveCenters = sc.broadcast(activeCenters)
+
+      // Find the sum and count of points mapping to each center
+      val totalContribs = data.mapPartitions { points =>
+        val thisActiveCenters = bcActiveCenters.value
+        val runs = thisActiveCenters.length
+        val k = thisActiveCenters(0).length
+        val dims = thisActiveCenters(0)(0).vector.size
+
+        val sums = Array.fill(runs, k)(Vectors.zeros(dims))
+        val counts = Array.fill(runs, k)(0L)
+
+        points.foreach { point =>
+          (0 until runs).foreach { i =>
+            val (bestCenter, cost) = KMeans.findClosest(thisActiveCenters(i), point)
+            costAccums(i) += cost
+            val sum = sums(i)(bestCenter)
+            axpy(1.0, point.vector, sum)
+            counts(i)(bestCenter) += 1
+          }
+        }
+
+        val contribs = for (i <- 0 until runs; j <- 0 until k) yield {
+          ((i, j), (sums(i)(j), counts(i)(j)))
+        }
+        contribs.iterator
+      }.reduceByKey(mergeContribs).collectAsMap()
+
+      // Update the cluster centers and costs for each active run
+      for ((run, i) <- activeRuns.zipWithIndex) {
+        var changed = false
+        var j = 0
+        while (j < k) {
+          val (sum, count) = totalContribs((i, j))
+          if (count != 0) {
+            scal(1.0 / count, sum)
+            val newCenter = new VectorWithNorm(sum)
+            if (KMeans.fastSquaredDistance(newCenter, centers(run)(j)) > epsilon * epsilon) {
+              changed = true
+            }
+            centers(run)(j) = newCenter
+          }
+          j += 1
+        }
+        if (!changed) {
+          active(run) = false
+          logInfo("Run " + run + " finished in " + (iteration + 1) + " iterations")
+        }
+        costs(run) = costAccums(i).value
+      }
+
+      activeRuns = activeRuns.filter(active(_))
+      iteration += 1
+    }
+
+    val iterationTimeInSeconds = (System.nanoTime() - iterationStartTime) / 1e9
+    logInfo(s"Iterations took " + "%.3f".format(iterationTimeInSeconds) + " seconds.")
+
+    if (iteration == maxIterations) {
+      logInfo(s"KMeans reached the max number of iterations: $maxIterations.")
+    } else {
+      logInfo(s"KMeans converged in $iteration iterations.")
+    }
+
+    val (minCost, bestRun) = costs.zipWithIndex.min
+
+    logInfo(s"The cost for the best run is $minCost.")
+
+    new KMeansModel(centers(bestRun).map(_.vector))
+  }
+
+
+
 
   /**
    * Initialize `runs` sets of cluster centers at random.
@@ -457,6 +601,29 @@ object KMeans {
       .setRuns(runs)
       .setInitializationMode(initializationMode)
       .run(data)
+  }
+
+
+  /**
+   * Trains a k-means model using the given set of parameters.
+   *
+   * @param data training points stored as `RDD[Vector]`
+   * @param k number of clusters
+   * @param maxIterations max number of iterations
+   * @param runs number of parallel runs, defaults to 1. The best model is returned.
+   * @param initializationMode initialization model, either "random" or "k-means||" (default).
+   */
+  def trainParallel(
+             data: RDD[Vector],
+             k: Int,
+             maxIterations: Int,
+             runs: Int,
+             initializationMode: String): KMeansModel = {
+    new KMeans().setK(k)
+      .setMaxIterations(maxIterations)
+      .setRuns(runs)
+      .setInitializationMode(initializationMode)
+      .runParallel(data)
   }
 
   /**
