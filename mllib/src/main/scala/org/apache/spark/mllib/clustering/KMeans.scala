@@ -28,6 +28,9 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.util.Utils
 import org.apache.spark.util.random.XORShiftRandom
+import scala.collection.parallel._
+
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * K-means clustering with support for multiple parallel runs and a k-means++ like initialization
@@ -44,7 +47,9 @@ class KMeans private (
     private var initializationMode: String,
     private var initializationSteps: Int,
     private var epsilon: Double,
-    private var seed: Long) extends Serializable with Logging {
+    private var seed: Long,
+    private var writeLock: ReentrantLock =  new ReentrantLock()
+                       ) extends Serializable with Logging {
 
   /**
    * Constructs a KMeans instance with default parameters: {k: 2, maxIterations: 20, runs: 1,
@@ -377,13 +382,27 @@ class KMeans private (
         val sums = Array.fill(runs, k)(Vectors.zeros(dims))
         val counts = Array.fill(runs, k)(0L)
 
-        points.foreach { point =>
+        val pointsArray = points.toArray.par
+        pointsArray.tasksupport = new ForkJoinTaskSupport(new scala.concurrent.forkjoin.ForkJoinPool(4))
+
+        //for now, we are just dealing with one run (no parallel models)
+        pointsArray.foreach { point =>
           (0 until runs).foreach { i =>
             val (bestCenter, cost) = KMeans.findClosest(thisActiveCenters(i), point)
-            costAccums(i) += cost
-            val sum = sums(i)(bestCenter)
-            axpy(1.0, point.vector, sum)
-            counts(i)(bestCenter) += 1
+
+
+            writeLock.lock()
+            try {
+              costAccums(i) += cost
+              val sum = sums(i)(bestCenter)
+              axpy(1.0, point.vector, sum)
+              counts(i)(bestCenter) += 1
+            } finally {
+              writeLock.unlock()
+            }
+
+
+
           }
         }
 

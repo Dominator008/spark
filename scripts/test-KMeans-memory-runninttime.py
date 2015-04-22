@@ -25,4 +25,4 @@ def test(numThreadsArray, numClustersArray, numSlicesArray):
 
 #test([1, 2, 4, 8, 12], [1000, 1500, 2000])
 #test([2, 4, 6], [1000, 2000], [6,8])
-test([6],[1000],[6])
+test([2],[2000],[4])
