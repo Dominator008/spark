@@ -14,13 +14,13 @@ object KMeansTest {
         k: Int = 30,
         numIterations: Int = 10,
         heapSize: Int = 8,
-        numSlices: Int = 16) extends AbstractParams[Params]
+        numSlices: Int = 16,
+        numThreadsPerTask: Int = 4,
+        multithreaded: Int = 1) extends AbstractParams[Params]
     
 
 
-    def main(args: Array[String]) {
-
-        
+    def main(args: Array[String]) {        
         val defaultParams = Params()
         val parser = new OptionParser[Params]("KMeansTest") {
           head("KMeansTest: an example k-means app for dense data.")
@@ -40,9 +40,14 @@ object KMeansTest {
             .required()
             .text(s"numSlices, required")
             .action((x, c) => c.copy(numSlices = x))
+          opt[Int]("numThreadsPerTask")
+            .text("number of threads per task")
+            .action((x, c) => c.copy(numThreadsPerTask = x))
+          opt[Int]("useMultithreaded")
+            .text(s"use multithreaded KMeans")
+            .action((x, c) => c.copy(multithreaded = x))
         }
-
-         parser.parse(args, defaultParams).map { params =>
+        parser.parse(args, defaultParams).map { params =>
           run(params)
         }.getOrElse {
           sys.exit(1)
@@ -79,12 +84,20 @@ object KMeansTest {
         }
 
         val sparseVectorListRDD = sc.parallelize(sparseVectorList, params.numSlices).cache()
-        println(sparseVectorListRDD.partitions.size)
-        println(params.numSlices)
-        val clusters = KMeans.trainParallel(sparseVectorListRDD, params.k, params.numIterations, 1, KMeans.RANDOM)
+        
+        println("Number of Partitions: " + sparseVectorListRDD.partitions.size)
+        println("Number of Clusters: " + params.k)
+        println("Number of Threads per Task: " + params.numThreadsPerTask)
+        println("Use Multithreaded KMeans: " + params.multithreaded)
+
+        if (params.multithreaded == 1) {
+            val clusters = KMeans.trainParallel(sparseVectorListRDD, params.k, params.numIterations, 1, params.numThreadsPerTask, KMeans.RANDOM)
+        }else {
+            val clusters = KMeans.train(sparseVectorListRDD, params.k, params.numIterations, 1, KMeans.RANDOM)
+        }
 
         //This part becomes reallly slow when number of clusters is large
-        // // Evaluate clustering by computing Within Set Sum of Squared Errors
+        // Evaluate clustering by computing Within Set Sum of Squared Errors
         // val WSSSE = clusters.computeCost(sparseVectorListRDD)
         // println("Within Set Sum of Squared Errors = " + WSSSE)
     }

@@ -48,8 +48,10 @@ class KMeans private (
     private var initializationSteps: Int,
     private var epsilon: Double,
     private var seed: Long,
+    private var numThreadsPerTask: Int = 1,
     private var writeLock: ReentrantLock =  new ReentrantLock()
                        ) extends Serializable with Logging {
+
 
   /**
    * Constructs a KMeans instance with default parameters: {k: 2, maxIterations: 20, runs: 1,
@@ -118,6 +120,16 @@ class KMeans private (
     this.runs = runs
     this
   }
+
+  def setNumThreadsPerTask(numThreadsPerTask: Int) : this.type = {
+    if (numThreadsPerTask <= 0 ){
+      throw new IllegalArgumentException("Number of threads per task must be positive")
+    }
+    this.numThreadsPerTask = numThreadsPerTask
+    this
+  }
+
+
 
   /**
    * Number of steps for the k-means|| initialization mode
@@ -383,7 +395,7 @@ class KMeans private (
         val counts = Array.fill(runs, k)(0L)
 
         val pointsArray = points.toArray.par
-        pointsArray.tasksupport = new ForkJoinTaskSupport(new scala.concurrent.forkjoin.ForkJoinPool(4))
+        pointsArray.tasksupport = new ForkJoinTaskSupport(new scala.concurrent.forkjoin.ForkJoinPool(this.numThreadsPerTask))
 
         //for now, we are just dealing with one run (no parallel models)
         pointsArray.foreach { point =>
@@ -637,10 +649,12 @@ object KMeans {
              k: Int,
              maxIterations: Int,
              runs: Int,
+             numThreadsPerTask: Int,
              initializationMode: String): KMeansModel = {
     new KMeans().setK(k)
       .setMaxIterations(maxIterations)
       .setRuns(runs)
+      .setNumThreadsPerTask(numThreadsPerTask)
       .setInitializationMode(initializationMode)
       .runParallel(data)
   }
