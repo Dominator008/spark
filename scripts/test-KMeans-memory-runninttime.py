@@ -64,8 +64,8 @@ def testMultithreaded(numThreadsArray, numClustersArray, numSlicesArray, numThre
                     os.system("python ./scripts/parse-mxbeans-heap.py " + outputFileName + ">>" + finalOutputFile)
     os.chdir("./scripts")
 
-#test([1, 2, 4, 6], [4000], [6])
+test([6], [3000], [6])
 #test([1], [1000, 2000, 3000], [6])
 #test([2],[1000],[6])
 #testMultithreaded([1, 2, 3],[2000, 3000, 4000],[2, 4, 6],[2, 4, 6])
-testMultithreaded([2],[4000],[6],[4])
+#testMultithreaded([2],[2000],[6],[4])
