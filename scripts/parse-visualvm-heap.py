@@ -17,5 +17,5 @@ for r in reader:
   sumHeap += used 
   maxHeap = used if used > maxHeap else maxHeap
 
-print "Average heap utilization: " + str(sumHeap / count / (1024*1024.0)) + " MB"
-print "Max heap utilization: " + str(maxHeap / (1024*1024.0)) + " MB"
+print "Average heap utilization: " + str(sumHeap / count / (1024*1024)) + " MB"
+print "Max heap utilization: " + str(maxHeap / (1024*1024)) + " MB"
