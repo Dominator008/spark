@@ -232,12 +232,19 @@ class GraphImpl[VD: ClassTag, ED: ClassTag] protected (
     val activeDirectionOpt = activeSetOpt.map(_._2)
 
     // Map and combine.
-    val preAgg = view.edges.partitionsRDD.mapPartitions(_.flatMap {
+    val preAgg = view.edges.partitionsRDD.mapPartitions(
+      input =>
+
+
+        input.flatMap {
       case (pid, edgePartition) =>
         // Choose scan method
+        println("mapPartitions Pid: " + pid)
+        println("mapPartitions edgePartition " + edgePartition + " numActives: " + edgePartition.numActives)
         val activeFraction = edgePartition.numActives.getOrElse(0) / edgePartition.indexSize.toFloat
         activeDirectionOpt match {
           case Some(EdgeDirection.Both) =>
+            println("mapPartitions case both direction: " + pid)
             if (activeFraction < 0.8) {
               edgePartition.aggregateMessagesIndexScan(sendMsg, mergeMsg, tripletFields,
                 EdgeActiveness.Both)
@@ -246,11 +253,13 @@ class GraphImpl[VD: ClassTag, ED: ClassTag] protected (
                 EdgeActiveness.Both)
             }
           case Some(EdgeDirection.Either) =>
+            println("mapPartitions case either direction: " + pid)
             // TODO: Because we only have a clustered index on the source vertex ID, we can't filter
             // the index here. Instead we have to scan all edges and then do the filter.
             edgePartition.aggregateMessagesEdgeScan(sendMsg, mergeMsg, tripletFields,
               EdgeActiveness.Either)
           case Some(EdgeDirection.Out) =>
+            println("mapPartitions case out: " + pid)
             if (activeFraction < 0.8) {
               edgePartition.aggregateMessagesIndexScan(sendMsg, mergeMsg, tripletFields,
                 EdgeActiveness.SrcOnly)
@@ -259,9 +268,11 @@ class GraphImpl[VD: ClassTag, ED: ClassTag] protected (
                 EdgeActiveness.SrcOnly)
             }
           case Some(EdgeDirection.In) =>
+            println("mapPartitions case in: " + pid)
             edgePartition.aggregateMessagesEdgeScan(sendMsg, mergeMsg, tripletFields,
               EdgeActiveness.DstOnly)
           case _ => // None
+            println("mapPartitions case none: " + pid)
             edgePartition.aggregateMessagesEdgeScan(sendMsg, mergeMsg, tripletFields,
               EdgeActiveness.Neither)
         }
@@ -269,7 +280,9 @@ class GraphImpl[VD: ClassTag, ED: ClassTag] protected (
 
     // do the final reduction reusing the index map
     vertices.aggregateUsingIndex(preAgg, mergeMsg)
+
   }
+
 
   override def outerJoinVertices[U: ClassTag, VD2: ClassTag]
       (other: RDD[(VertexId, U)])

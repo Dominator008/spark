@@ -145,6 +145,7 @@ object Pregel extends Logging {
       activeMessages = messages.count()
 
       logInfo("Pregel finished iteration " + i)
+      println("Pregel finished iteration " + i)
 
       // Unpersist the RDDs hidden by newly-materialized RDDs
       oldMessages.unpersist(blocking=false)
