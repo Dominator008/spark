@@ -432,10 +432,10 @@ class EdgePartition[
 
     //var ctx = new AggregatingEdgeContext[VD, ED, A](mergeMsg, aggregates, bitset)
     var i = 0
-    //val indexArray = (0 until size).par
-    //indexArray.tasksupport = new ForkJoinTaskSupport(new scala.concurrent.forkjoin.ForkJoinPool(6))
+    val indexArray = (0 until size).par
+    indexArray.tasksupport = new ForkJoinTaskSupport(new scala.concurrent.forkjoin.ForkJoinPool(6))
 
-    val indexArray = (0 until size)
+    //val indexArray = (0 until size)
 
     indexArray.foreach{ i =>
 
@@ -519,9 +519,7 @@ class EdgePartition[
             val dstAttr =
               if (tripletFields.useDst) vertexAttrs(localDstId) else null.asInstanceOf[VD]
             ctx.setRest(dstId, localDstId, dstAttr, data(pos))
-            writeLock.lock()
             sendMsg(ctx)
-            writeLock.unlock()
           }
           pos += 1
         }
@@ -544,9 +542,9 @@ class EdgePartition[
     val bitset = new BitSet(vertexAttrs.length)
 
 
-    //val indexArray = index.iterator.toArray.par
-    //indexArray.tasksupport = new ForkJoinTaskSupport(new scala.concurrent.forkjoin.ForkJoinPool(6))
-    val indexArray = index.iterator.toArray
+    val indexArray = index.iterator.toArray.par
+    indexArray.tasksupport = new ForkJoinTaskSupport(new scala.concurrent.forkjoin.ForkJoinPool(6))
+    //val indexArray = index.iterator.toArray
 
     indexArray.foreach { cluster =>
 
@@ -583,9 +581,7 @@ class EdgePartition[
             val dstAttr =
               if (tripletFields.useDst) vertexAttrs(localDstId) else null.asInstanceOf[VD]
             ctx.setRest(dstId, localDstId, dstAttr, data(pos))
-            writeLock.lock()
             sendMsg(ctx)
-            writeLock.unlock()
           }
           pos += 1
         }
