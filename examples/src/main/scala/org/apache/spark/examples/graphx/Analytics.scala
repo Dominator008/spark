@@ -70,6 +70,17 @@ object Analytics extends Logging {
         val outFname = options.remove("output").getOrElse("")
         val numIterOpt = options.remove("numIter").map(_.toInt)
 
+        val useParallelInput = options.remove("useParallel").map(_.toInt).getOrElse(0)
+        println("useParallelInput: " + useParallelInput)
+        var useParallel = false
+        if (useParallelInput == 1) {
+          println("true")
+          useParallel = true
+        } else {
+          println("false")
+          useParallel = false
+        }
+
         options.foreach {
           case (opt, _) => throw new IllegalArgumentException("Invalid option: " + opt)
         }
@@ -88,10 +99,10 @@ object Analytics extends Logging {
 
         println("GRAPHX: Number of vertices " + graph.vertices.count)
         println("GRAPHX: Number of edges " + graph.edges.count)
-
+        println("GRAPHX: Use Parallel " + useParallel)
         val pr = (numIterOpt match {
           case Some(numIter) => PageRank.run(graph, numIter)
-          case None => PageRank.runUntilConvergence(graph, tol, true)
+          case None => PageRank.runUntilConvergence(graph, tol, useParallel)
         }).vertices.cache()
 
         println("GRAPHX: Total rank: " + pr.map(_._2).reduce(_ + _))
