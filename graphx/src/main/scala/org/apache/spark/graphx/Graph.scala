@@ -386,6 +386,7 @@ abstract class Graph[VD: ClassTag, ED: ClassTag] protected () extends Serializab
   def mapReduceTriplets[A: ClassTag](
       mapFunc: EdgeTriplet[VD, ED] => Iterator[(VertexId, A)],
       reduceFunc: (A, A) => A,
+      useParallel: Boolean = false,
       activeSetOpt: Option[(VertexRDD[_], EdgeDirection)] = None)
     : VertexRDD[A]
 
@@ -458,7 +459,8 @@ abstract class Graph[VD: ClassTag, ED: ClassTag] protected () extends Serializab
       sendMsg: EdgeContext[VD, ED, A] => Unit,
       mergeMsg: (A, A) => A,
       tripletFields: TripletFields,
-      activeSetOpt: Option[(VertexRDD[_], EdgeDirection)])
+      activeSetOpt: Option[(VertexRDD[_], EdgeDirection)],
+      useParallel: Boolean = false)
     : VertexRDD[A]
 
   /**

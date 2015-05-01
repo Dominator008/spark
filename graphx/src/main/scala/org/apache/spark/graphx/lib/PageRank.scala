@@ -133,7 +133,7 @@ object PageRank extends Logging {
    *         containing the normalized weight.
    */
   def runUntilConvergence[VD: ClassTag, ED: ClassTag](
-      graph: Graph[VD, ED], tol: Double, resetProb: Double = 0.15): Graph[Double, Double] =
+      graph: Graph[VD, ED], tol: Double, useParallel: Boolean = false, resetProb: Double = 0.15): Graph[Double, Double] =
   {
     // Initialize the pagerankGraph with each edge attribute
     // having weight 1/outDegree and each vertex with attribute 1.0.
@@ -170,7 +170,7 @@ object PageRank extends Logging {
     val initialMessage = resetProb / (1.0 - resetProb)
 
     // Execute a dynamic version of Pregel.
-    Pregel(pagerankGraph, initialMessage, activeDirection = EdgeDirection.Out)(
+    Pregel(pagerankGraph, initialMessage, Int.MaxValue, useParallel,  activeDirection = EdgeDirection.Out)(
       vertexProgram, sendMessage, messageCombiner)
       .mapVertices((vid, attr) => attr._1)
   } // end of deltaPageRank

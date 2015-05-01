@@ -17,6 +17,9 @@
 
 package org.apache.spark.graphx.impl
 
+import java.util.concurrent.locks.ReentrantLock
+
+import scala.collection.parallel.ForkJoinTaskSupport
 import scala.reflect.{classTag, ClassTag}
 
 import org.apache.spark.graphx._
@@ -61,7 +64,8 @@ class EdgePartition[
     global2local: GraphXPrimitiveKeyOpenHashMap[VertexId, Int],
     local2global: Array[VertexId],
     vertexAttrs: Array[VD],
-    activeSet: Option[VertexSet])
+    activeSet: Option[VertexSet],
+    private var writeLock: ReentrantLock =  new ReentrantLock()                                                                                                           )
   extends Serializable {
 
   /** No-arg constructor for serialization. */
@@ -414,6 +418,51 @@ class EdgePartition[
     bitset.iterator.map { localId => (local2global(localId), aggregates(localId)) }
   }
 
+
+
+  def parAggregateMessagesEdgeScan[A: ClassTag](
+                                              sendMsg: EdgeContext[VD, ED, A] => Unit,
+                                              mergeMsg: (A, A) => A,
+                                              tripletFields: TripletFields,
+                                              activeness: EdgeActiveness): Iterator[(VertexId, A)] = {
+    println("Parallel AggregateMessagesEdgeScan!!! :" )
+
+    val aggregates = new Array[A](vertexAttrs.length)
+    val bitset = new BitSet(vertexAttrs.length)
+
+    //var ctx = new AggregatingEdgeContext[VD, ED, A](mergeMsg, aggregates, bitset)
+    var i = 0
+    val indexArray = (0 until size).par
+    indexArray.tasksupport = new ForkJoinTaskSupport(new scala.concurrent.forkjoin.ForkJoinPool(6))
+
+    indexArray.foreach{ i =>
+
+      var ctx = new AggregatingEdgeContext[VD, ED, A](mergeMsg, aggregates, bitset)
+
+
+      val localSrcId = localSrcIds(i)
+      val srcId = local2global(localSrcId)
+      val localDstId = localDstIds(i)
+      val dstId = local2global(localDstId)
+      val edgeIsActive =
+        if (activeness == EdgeActiveness.Neither) true
+        else if (activeness == EdgeActiveness.SrcOnly) isActive(srcId)
+        else if (activeness == EdgeActiveness.DstOnly) isActive(dstId)
+        else if (activeness == EdgeActiveness.Both) isActive(srcId) && isActive(dstId)
+        else if (activeness == EdgeActiveness.Either) isActive(srcId) || isActive(dstId)
+        else throw new Exception("unreachable")
+      if (edgeIsActive) {
+        val srcAttr = if (tripletFields.useSrc) vertexAttrs(localSrcId) else null.asInstanceOf[VD]
+        val dstAttr = if (tripletFields.useDst) vertexAttrs(localDstId) else null.asInstanceOf[VD]
+        ctx.set(srcId, dstId, localSrcId, localDstId, srcAttr, dstAttr, data(i))
+        sendMsg(ctx)
+      }
+      //i += 1
+    }
+
+    bitset.iterator.map { localId => (local2global(localId), aggregates(localId)) }
+  }
+
   /**
    * Send messages along edges and aggregate them at the receiving vertices. Implemented by
    * filtering the source vertex index, then scanning each edge cluster.
@@ -430,6 +479,8 @@ class EdgePartition[
       mergeMsg: (A, A) => A,
       tripletFields: TripletFields,
       activeness: EdgeActiveness): Iterator[(VertexId, A)] = {
+
+
     val aggregates = new Array[A](vertexAttrs.length)
     val bitset = new BitSet(vertexAttrs.length)
 
@@ -466,7 +517,9 @@ class EdgePartition[
             val dstAttr =
               if (tripletFields.useDst) vertexAttrs(localDstId) else null.asInstanceOf[VD]
             ctx.setRest(dstId, localDstId, dstAttr, data(pos))
+            writeLock.lock()
             sendMsg(ctx)
+            writeLock.unlock()
           }
           pos += 1
         }
@@ -475,6 +528,72 @@ class EdgePartition[
 
     bitset.iterator.map { localId => (local2global(localId), aggregates(localId)) }
   }
+
+
+  def parAggregateMessagesIndexScan[A: ClassTag](
+                                               sendMsg: EdgeContext[VD, ED, A] => Unit,
+                                               mergeMsg: (A, A) => A,
+                                               tripletFields: TripletFields,
+                                               activeness: EdgeActiveness): Iterator[(VertexId, A)] = {
+
+    println("Parallel AggregateMessagesIndexScan!!! :" )
+
+    val aggregates = new Array[A](vertexAttrs.length)
+    val bitset = new BitSet(vertexAttrs.length)
+
+
+    val indexArray = index.iterator.toArray.par
+    indexArray.tasksupport = new ForkJoinTaskSupport(new scala.concurrent.forkjoin.ForkJoinPool(6))
+
+
+    indexArray.foreach { cluster =>
+
+      var ctx = new AggregatingEdgeContext[VD, ED, A](mergeMsg, aggregates, bitset)
+
+      val clusterSrcId = cluster._1
+      val clusterPos = cluster._2
+      val clusterLocalSrcId = localSrcIds(clusterPos)
+
+      val scanCluster =
+        if (activeness == EdgeActiveness.Neither) true
+        else if (activeness == EdgeActiveness.SrcOnly) isActive(clusterSrcId)
+        else if (activeness == EdgeActiveness.DstOnly) true
+        else if (activeness == EdgeActiveness.Both) isActive(clusterSrcId)
+        else if (activeness == EdgeActiveness.Either) true
+        else throw new Exception("unreachable")
+
+      if (scanCluster) {
+        var pos = clusterPos
+        val srcAttr =
+          if (tripletFields.useSrc) vertexAttrs(clusterLocalSrcId) else null.asInstanceOf[VD]
+        ctx.setSrcOnly(clusterSrcId, clusterLocalSrcId, srcAttr)
+        while (pos < size && localSrcIds(pos) == clusterLocalSrcId) {
+          val localDstId = localDstIds(pos)
+          val dstId = local2global(localDstId)
+          val edgeIsActive =
+            if (activeness == EdgeActiveness.Neither) true
+            else if (activeness == EdgeActiveness.SrcOnly) true
+            else if (activeness == EdgeActiveness.DstOnly) isActive(dstId)
+            else if (activeness == EdgeActiveness.Both) isActive(dstId)
+            else if (activeness == EdgeActiveness.Either) isActive(clusterSrcId) || isActive(dstId)
+            else throw new Exception("unreachable")
+          if (edgeIsActive) {
+            val dstAttr =
+              if (tripletFields.useDst) vertexAttrs(localDstId) else null.asInstanceOf[VD]
+            ctx.setRest(dstId, localDstId, dstAttr, data(pos))
+            writeLock.lock()
+            sendMsg(ctx)
+            writeLock.unlock()
+          }
+          pos += 1
+        }
+      }
+    }
+
+    bitset.iterator.map { localId => (local2global(localId), aggregates(localId)) }
+  }
+
+
 }
 
 private class AggregatingEdgeContext[VD, ED, A](

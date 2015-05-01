@@ -354,12 +354,13 @@ class GraphOps[VD: ClassTag, ED: ClassTag](graph: Graph[VD, ED]) extends Seriali
   def pregel[A: ClassTag](
       initialMsg: A,
       maxIterations: Int = Int.MaxValue,
+      useParallel: Boolean = false,
       activeDirection: EdgeDirection = EdgeDirection.Either)(
       vprog: (VertexId, VD, A) => VD,
       sendMsg: EdgeTriplet[VD, ED] => Iterator[(VertexId,A)],
       mergeMsg: (A, A) => A)
     : Graph[VD, ED] = {
-    Pregel(graph, initialMsg, maxIterations, activeDirection)(vprog, sendMsg, mergeMsg)
+    Pregel(graph, initialMsg, maxIterations, useParallel, activeDirection)(vprog, sendMsg, mergeMsg)
   }
 
   /**
@@ -369,7 +370,7 @@ class GraphOps[VD: ClassTag, ED: ClassTag](graph: Graph[VD, ED]) extends Seriali
    * @see [[org.apache.spark.graphx.lib.PageRank$#runUntilConvergence]]
    */
   def pageRank(tol: Double, resetProb: Double = 0.15): Graph[Double, Double] = {
-    PageRank.runUntilConvergence(graph, tol, resetProb)
+    PageRank.runUntilConvergence(graph, tol, false, resetProb)
   }
 
   /**

@@ -191,6 +191,7 @@ class GraphImpl[VD: ClassTag, ED: ClassTag] protected (
   override def mapReduceTriplets[A: ClassTag](
       mapFunc: EdgeTriplet[VD, ED] => Iterator[(VertexId, A)],
       reduceFunc: (A, A) => A,
+      useParallel: Boolean = false,
       activeSetOpt: Option[(VertexRDD[_], EdgeDirection)]): VertexRDD[A] = {
 
     def sendMsg(ctx: EdgeContext[VD, ED, A]) {
@@ -210,14 +211,15 @@ class GraphImpl[VD: ClassTag, ED: ClassTag] protected (
     val mapUsesDstAttr = accessesVertexAttr(mapFunc, "dstAttr")
     val tripletFields = new TripletFields(mapUsesSrcAttr, mapUsesDstAttr, true)
 
-    aggregateMessagesWithActiveSet(sendMsg, reduceFunc, tripletFields, activeSetOpt)
+    aggregateMessagesWithActiveSet(sendMsg, reduceFunc, tripletFields, activeSetOpt, useParallel)
   }
 
   override def aggregateMessagesWithActiveSet[A: ClassTag](
       sendMsg: EdgeContext[VD, ED, A] => Unit,
       mergeMsg: (A, A) => A,
       tripletFields: TripletFields,
-      activeSetOpt: Option[(VertexRDD[_], EdgeDirection)]): VertexRDD[A] = {
+      activeSetOpt: Option[(VertexRDD[_], EdgeDirection)],
+      useParallel:Boolean = false): VertexRDD[A] = {
 
     vertices.cache()
     // For each vertex, replicate its attribute only to partitions where it is
@@ -245,36 +247,81 @@ class GraphImpl[VD: ClassTag, ED: ClassTag] protected (
         activeDirectionOpt match {
           case Some(EdgeDirection.Both) =>
             println("mapPartitions case both direction: " + pid)
-            if (activeFraction < 0.8) {
-              edgePartition.aggregateMessagesIndexScan(sendMsg, mergeMsg, tripletFields,
-                EdgeActiveness.Both)
+            if (!useParallel) {
+              if (activeFraction < 0.8) {
+                edgePartition.aggregateMessagesIndexScan(sendMsg, mergeMsg, tripletFields,
+                  EdgeActiveness.Both)
+              } else {
+                edgePartition.aggregateMessagesEdgeScan(sendMsg, mergeMsg, tripletFields,
+                  EdgeActiveness.Both)
+              }
             } else {
-              edgePartition.aggregateMessagesEdgeScan(sendMsg, mergeMsg, tripletFields,
-                EdgeActiveness.Both)
+              if (activeFraction < 0.8) {
+                edgePartition.parAggregateMessagesIndexScan(sendMsg, mergeMsg, tripletFields,
+                  EdgeActiveness.Both)
+              } else {
+                edgePartition.parAggregateMessagesEdgeScan(sendMsg, mergeMsg, tripletFields,
+                  EdgeActiveness.Both)
+              }
             }
+
           case Some(EdgeDirection.Either) =>
             println("mapPartitions case either direction: " + pid)
             // TODO: Because we only have a clustered index on the source vertex ID, we can't filter
             // the index here. Instead we have to scan all edges and then do the filter.
-            edgePartition.aggregateMessagesEdgeScan(sendMsg, mergeMsg, tripletFields,
-              EdgeActiveness.Either)
+
+            if (!useParallel) {
+              edgePartition.aggregateMessagesEdgeScan(sendMsg, mergeMsg, tripletFields,
+                EdgeActiveness.Either)
+            } else {
+              edgePartition.parAggregateMessagesEdgeScan(sendMsg, mergeMsg, tripletFields,
+                EdgeActiveness.Either)
+            }
+
+
           case Some(EdgeDirection.Out) =>
             println("mapPartitions case out: " + pid)
-            if (activeFraction < 0.8) {
-              edgePartition.aggregateMessagesIndexScan(sendMsg, mergeMsg, tripletFields,
-                EdgeActiveness.SrcOnly)
+
+            if (!useParallel) {
+              if (activeFraction < 0.8) {
+                edgePartition.aggregateMessagesIndexScan(sendMsg, mergeMsg, tripletFields,
+                  EdgeActiveness.SrcOnly)
+              } else {
+                edgePartition.aggregateMessagesEdgeScan(sendMsg, mergeMsg, tripletFields,
+                  EdgeActiveness.SrcOnly)
+              }
             } else {
-              edgePartition.aggregateMessagesEdgeScan(sendMsg, mergeMsg, tripletFields,
-                EdgeActiveness.SrcOnly)
+              if (activeFraction < 0.8) {
+                edgePartition.parAggregateMessagesIndexScan(sendMsg, mergeMsg, tripletFields,
+                  EdgeActiveness.SrcOnly)
+              } else {
+                edgePartition.parAggregateMessagesEdgeScan(sendMsg, mergeMsg, tripletFields,
+                  EdgeActiveness.SrcOnly)
+              }
             }
+
           case Some(EdgeDirection.In) =>
             println("mapPartitions case in: " + pid)
-            edgePartition.aggregateMessagesEdgeScan(sendMsg, mergeMsg, tripletFields,
-              EdgeActiveness.DstOnly)
+
+            if (!useParallel) {
+              edgePartition.aggregateMessagesEdgeScan(sendMsg, mergeMsg, tripletFields,
+                EdgeActiveness.DstOnly)
+            } else {
+              edgePartition.parAggregateMessagesEdgeScan(sendMsg, mergeMsg, tripletFields,
+                EdgeActiveness.DstOnly)
+            }
+
+
           case _ => // None
             println("mapPartitions case none: " + pid)
-            edgePartition.aggregateMessagesEdgeScan(sendMsg, mergeMsg, tripletFields,
-              EdgeActiveness.Neither)
+
+            if (!useParallel) {
+              edgePartition.aggregateMessagesEdgeScan(sendMsg, mergeMsg, tripletFields,
+                EdgeActiveness.Neither)
+            } else {
+              edgePartition.parAggregateMessagesEdgeScan(sendMsg, mergeMsg, tripletFields,
+                EdgeActiveness.Neither)
+            }
         }
     }).setName("GraphImpl.aggregateMessages - preAgg")
 
