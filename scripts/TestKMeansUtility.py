@@ -14,14 +14,14 @@ def test(numThreadsArray, numClustersArray, numSlicesArray):
     for numClusters in numClustersArray:
         for numThread in numThreadsArray:
             for numSlices in numSlicesArray:
-        #os.system("echo " + str(numThread))          
+        #os.system("echo " + str(numThread))
                 os.system("echo " + str(numClusters) + " clusters, " + \
                               str(numThread) + " threads, " + \
                               str(numSlices) + " slices >> " + \
-                              finalOutputFile)  
-                
+                              finalOutputFile)
+
                 outputFileName = outputdir + "log-" + str(numThread) + "-" + str(numClusters) + "-" + str(numSlices)
-                
+
                 commandLineStr = "bin/run-example-with-threadNum " + str(numThread) \
                     + " org.apache.spark.examples.mllib.KMeansTest -k " + str(numClusters) + \
                     " --numIterations 10 --heapSize 5 --numSlices "+ str(numSlices) + \
@@ -40,17 +40,17 @@ def testMultithreaded(numThreadsArray, numClustersArray, numSlicesArray, numThre
     os.mkdir(outputdir)
     numSlices = 4
 
-    finalOutputFile = outputdir + "summary.out" 
+    finalOutputFile = outputdir + "summary.out"
     for numClusters in numClustersArray:
         for numThread in numThreadsArray:
             for numSlices in numSlicesArray:
                 for numThreadsPerTask in numThreadsPerTaskArray:
-        #os.system("echo " + str(numThread))          
+        #os.system("echo " + str(numThread))
                     os.system("echo " + str(numClusters) + " clusters, " + \
                                   str(numThread) + " threads, " + \
                                   str(numSlices) + " slices, multithreaded " + \
                                   "with " + str(numThreadsPerTask) + " threads per task >>" +\
-                                  finalOutputFile)  
+                                  finalOutputFile)
                     outputFileName = outputdir + "log-" + str(numThread) + "-" + str(numClusters) + \
                         "-" + str(numSlices) + "-multithreaded"
                     commandLineStr = "bin/run-example-with-threadNum " + str(numThread) + \
@@ -66,6 +66,6 @@ def testMultithreaded(numThreadsArray, numClustersArray, numSlicesArray, numThre
 
 #test([6], [3000], [6])
 #test([1], [1000, 2000, 3000], [6])
-#test([2],[1000],[6])
-#testMultithreaded([1, 2, 3],[2000, 3000, 4000],[2, 4, 6],[2, 4, 6])
-#testMultithreaded([2],[2000],[6],[4])
+#test([10],[6000],[10])
+testMultithreaded([2],[6000],[6],[6])
+#testMultithreaded([2, 4],[6000],[2, 4],[2, 4])
