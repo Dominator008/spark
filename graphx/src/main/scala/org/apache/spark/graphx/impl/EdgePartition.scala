@@ -428,40 +428,79 @@ class EdgePartition[
                                               activeness: EdgeActiveness): Iterator[(VertexId, A)] = {
     println("Parallel AggregateMessagesEdgeScan!!! :" )
 
-    val aggregates = new Array[A](vertexAttrs.length)
-    val bitset = new BitSet(vertexAttrs.length)
-
-    //var ctx = new AggregatingEdgeContext[VD, ED, A](mergeMsg, aggregates, bitset)
-    var i = 0
-    val indexArray = (0 until size).par
-    indexArray.tasksupport = new ForkJoinTaskSupport(new scala.concurrent.forkjoin.ForkJoinPool(6))
-
-    indexArray.foreach{ i =>
-
-      var ctx = new AggregatingEdgeContext[VD, ED, A](mergeMsg, aggregates, bitset)
+    val numVertices = vertexAttrs.length
+    val t0 = System.nanoTime()
 
 
-      val localSrcId = localSrcIds(i)
-      val srcId = local2global(localSrcId)
-      val localDstId = localDstIds(i)
-      val dstId = local2global(localDstId)
-      val edgeIsActive =
-        if (activeness == EdgeActiveness.Neither) true
-        else if (activeness == EdgeActiveness.SrcOnly) isActive(srcId)
-        else if (activeness == EdgeActiveness.DstOnly) isActive(dstId)
-        else if (activeness == EdgeActiveness.Both) isActive(srcId) && isActive(dstId)
-        else if (activeness == EdgeActiveness.Either) isActive(srcId) || isActive(dstId)
-        else throw new Exception("unreachable")
-      if (edgeIsActive) {
-        val srcAttr = if (tripletFields.useSrc) vertexAttrs(localSrcId) else null.asInstanceOf[VD]
-        val dstAttr = if (tripletFields.useDst) vertexAttrs(localDstId) else null.asInstanceOf[VD]
-        ctx.set(srcId, dstId, localSrcId, localDstId, srcAttr, dstAttr, data(i))
-        sendMsg(ctx)
-      }
-      //i += 1
+    val numThreadsPerTask = 6;
+    println("number of threads per task: " + numThreadsPerTask)
+
+    val aggregatesArray = new Array[Array[A]](numThreadsPerTask)
+    val bitsetArray = new Array[BitSet](numThreadsPerTask)
+
+    println("Index Array Size: " + size)
+    val chunksize = size/numThreadsPerTask
+    val doneSignal = new CountDownLatch(numThreadsPerTask)
+
+    (0 until numThreadsPerTask).foreach { threadID =>
+
+      val aggregates = new Array[A](vertexAttrs.length)
+      val bitset = new BitSet(vertexAttrs.length)
+      aggregatesArray(threadID) = aggregates
+      bitsetArray(threadID) = bitset
+
+
+      val thread = new Thread(new Runnable {
+        def run(): Unit = {
+          val start = threadID*chunksize
+          var end = (threadID + 1)*chunksize
+          if (threadID == numThreadsPerTask - 1) {
+            end = size
+          }
+
+
+          var ctx = new AggregatingEdgeContext[VD, ED, A](mergeMsg, aggregates, bitset)
+          println("thread: " + threadID + " start: " + start + " end: " + end)
+          ( start until end) .foreach { i =>
+            var ctx = new AggregatingEdgeContext[VD, ED, A](mergeMsg, aggregates, bitset)
+
+
+            val localSrcId = localSrcIds(i)
+            val srcId = local2global(localSrcId)
+            val localDstId = localDstIds(i)
+            val dstId = local2global(localDstId)
+            val edgeIsActive =
+              if (activeness == EdgeActiveness.Neither) true
+              else if (activeness == EdgeActiveness.SrcOnly) isActive(srcId)
+              else if (activeness == EdgeActiveness.DstOnly) isActive(dstId)
+              else if (activeness == EdgeActiveness.Both) isActive(srcId) && isActive(dstId)
+              else if (activeness == EdgeActiveness.Either) isActive(srcId) || isActive(dstId)
+              else throw new Exception("unreachable")
+            if (edgeIsActive) {
+              val srcAttr = if (tripletFields.useSrc) vertexAttrs(localSrcId) else null.asInstanceOf[VD]
+              val dstAttr = if (tripletFields.useDst) vertexAttrs(localDstId) else null.asInstanceOf[VD]
+              ctx.set(srcId, dstId, localSrcId, localDstId, srcAttr, dstAttr, data(i))
+              sendMsg(ctx)
+            }
+          }//end of foreach
+          doneSignal.countDown()
+        }
+      })
+      thread.start()
     }
 
-    bitset.iterator.map { localId => (local2global(localId), aggregates(localId)) }
+    doneSignal.await()
+    println("parAggregateMessagesEdgeScan workers finished!")
+    val t1 = System.nanoTime()
+    println("Workers Elapsed time: " + (t1 - t0)/1000000 + "ms")
+
+    val finalAggregates = aggregatesArray.par.reduce((x, y) => (x, y).zipped.map(mergeMsg))
+    val finalBitset = bitsetArray.par.reduce((x, y) => x | y)
+
+    val t2 = System.nanoTime()
+    println("Final Reduction Elapsed time: " + (t2 - t1)/1000000 + "ms")
+
+    finalBitset.iterator.map { localId => (local2global(localId), finalAggregates(localId)) }
   }
 
   /**
@@ -541,14 +580,15 @@ class EdgePartition[
     val t0 = System.nanoTime()
 
 
-    val numThreadsPerTask = 3;
+    val numThreadsPerTask = 6;
+    println("number of threads per task: " + numThreadsPerTask)
 
     val aggregatesArray = new Array[Array[A]](numThreadsPerTask)
     val bitsetArray = new Array[BitSet](numThreadsPerTask)
 
     val indexArray = index.iterator.toArray
     //indexArray.tasksupport = new ForkJoinTaskSupport(new scala.concurrent.forkjoin.ForkJoinPool(6))
-    println("Index Array Size: ", indexArray.size)
+    println("Index Array Size: " + indexArray.size)
     val chunksize = indexArray.length/numThreadsPerTask
     val doneSignal = new CountDownLatch(numThreadsPerTask)
 
@@ -557,10 +597,8 @@ class EdgePartition[
 
       val aggregates = new Array[A](vertexAttrs.length)
       val bitset = new BitSet(vertexAttrs.length)
-
       aggregatesArray(threadID) = aggregates
       bitsetArray(threadID) = bitset
-      var ctx = new AggregatingEdgeContext[VD, ED, A](mergeMsg, aggregates, bitset)
 
 
       val thread = new Thread (new Runnable {
@@ -571,6 +609,10 @@ class EdgePartition[
           if (threadID == numThreadsPerTask - 1) {
             end = indexArray.size
           }
+
+
+          var ctx = new AggregatingEdgeContext[VD, ED, A](mergeMsg, aggregates, bitset)
+
           println("thread: " + threadID + " start: " + start + " end: " + end)
 
           ( start until end) .foreach { clusterIdx =>
@@ -580,6 +622,8 @@ class EdgePartition[
             val clusterSrcId = cluster._1
             val clusterPos = cluster._2
             val clusterLocalSrcId = localSrcIds(clusterPos)
+
+            //println("cluster pos: " + clusterPos + " cluster src id: " + clusterSrcId)
 
             val scanCluster =
               if (activeness == EdgeActiveness.Neither) true
@@ -627,8 +671,8 @@ class EdgePartition[
     val t1 = System.nanoTime()
     println("Workers Elapsed time: " + (t1 - t0)/1000000 + "ms")
 
-    val finalAggregates = aggregatesArray.reduce((x, y) => (x, y).zipped.map(mergeMsg))
-    val finalBitset = bitsetArray.reduce((x, y) => x | y)
+    val finalAggregates = aggregatesArray.par.reduce((x, y) => (x, y).zipped.map(mergeMsg))
+    val finalBitset = bitsetArray.par.reduce((x, y) => x | y)
 
     val t2 = System.nanoTime()
     println("Final Reduction Elapsed time: " + (t2 - t1)/1000000 + "ms")
