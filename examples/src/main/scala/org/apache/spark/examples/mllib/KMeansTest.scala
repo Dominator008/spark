@@ -20,7 +20,7 @@ object KMeansTest {
     
 
 
-    def main(args: Array[String]) {        
+    def main(args: Array[String]) {
         val defaultParams = Params()
         val parser = new OptionParser[Params]("KMeansTest") {
           head("KMeansTest: an example k-means app for dense data.")
@@ -57,13 +57,10 @@ object KMeansTest {
     }
 
     def run(params: Params) {
-
-
         val conf = new SparkConf()
             .setAppName("KMeansTest")
             //.set("spark.executor.extraJavaOptions", "-XX:+PrintGC")
             .set("spark.executor.memory", params.heapSize + "g")
-
 
         val sc = new SparkContext(conf)
         // Load and parse the data

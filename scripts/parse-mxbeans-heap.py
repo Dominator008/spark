@@ -14,7 +14,7 @@ for line in lines:
     for i in range(len(line)):
         if line[i] == 'Heap':
             #print line
-            #print line[i+4]                                                    
+            #print line[i+4]
             HeapMemList.append(int(line[i+8]))
         if line[i] == 'Iterations' and line[i+1] == 'took':
             #print line
@@ -23,9 +23,9 @@ for line in lines:
             #print line
             Iterations = (line[i+3]).replace('.','')
 
-            
+
 #print HeapMemList
-            
-print "average heap mem utilization: " +  str(sum(HeapMemList)/(1024*1024*len(HeapMemList))) + " MB"
-print "max heap mem utilization: " +  str(max(HeapMemList)/(1024*1024)) + " MB"
+
+#print "average heap mem utilization: " +  str(sum(HeapMemList)/(1024*1024*len(HeapMemList))) + " MB"
+#print "max heap mem utilization: " +  str(max(HeapMemList)/(1024*1024)) + " MB"
 print "ran " + Iterations + " iterations for " + Time + " seconds"

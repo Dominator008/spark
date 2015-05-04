@@ -235,8 +235,6 @@ class KMeans private (
    */
   private def runAlgorithm(data: RDD[VectorWithNorm]): KMeansModel = {
 
-    logInfo("Running My Own KMeans !!!!!!!!!!!!!!!!!!!!!!!!!")
-
     val sc = data.sparkContext
 
     val initStartTime = System.nanoTime()
@@ -403,7 +401,7 @@ class KMeans private (
             val (bestCenter, cost) = KMeans.findClosest(thisActiveCenters(i), point)
 
 
-            writeLock.lock()
+            /*writeLock.lock()
             try {
               costAccums(i) += cost
               val sum = sums(i)(bestCenter)
@@ -411,10 +409,21 @@ class KMeans private (
               counts(i)(bestCenter) += 1
             } finally {
               writeLock.unlock()
+            }*/
+            writeLock.lock()
+            try {
+              costAccums(i) += cost
+            } finally {
+              writeLock.unlock()
             }
-
-
-
+            val sum = sums(i)(bestCenter)
+            axpy(1.0, point.vector, sum)
+            writeLock.lock()
+            try {
+              counts(i)(bestCenter) += 1
+            } finally {
+              writeLock.unlock()
+            }
           }
         }
 

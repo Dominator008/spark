@@ -34,9 +34,9 @@ object LiveJournalPageRank {
           "    [--output=<output_file>]\n" +
           "        If specified, the file to write the ranks to.\n" +
           "    [--partStrategy=RandomVertexCut | EdgePartition1D | EdgePartition2D | " +
-          "   [--useParallel 1 | 0]" +
           "CanonicalRandomVertexCut]\n" +
-          "        The way edges are assigned to edge partitions. Default is RandomVertexCut.")
+          "        The way edges are assigned to edge partitions. Default is RandomVertexCut.") +
+        "   [--useParallel 1 | 0]\n"
       System.exit(-1)
     }
 

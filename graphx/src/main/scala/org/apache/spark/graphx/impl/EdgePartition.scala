@@ -390,6 +390,9 @@ class EdgePartition[
       mergeMsg: (A, A) => A,
       tripletFields: TripletFields,
       activeness: EdgeActiveness): Iterator[(VertexId, A)] = {
+
+    val t0 = System.nanoTime()
+
     val aggregates = new Array[A](vertexAttrs.length)
     val bitset = new BitSet(vertexAttrs.length)
 
@@ -416,7 +419,13 @@ class EdgePartition[
       i += 1
     }
 
-    bitset.iterator.map { localId => (local2global(localId), aggregates(localId)) }
+    val output =  bitset.iterator.map { localId => (local2global(localId), aggregates(localId)) }
+
+    println("sequential AggregateMessagesEdgeScan workers finished!")
+    val t1 = System.nanoTime()
+    println("Elapsed time: " + (t1 - t0)/1000000 + "ms")
+
+    output
   }
 
 
@@ -432,7 +441,7 @@ class EdgePartition[
     val t0 = System.nanoTime()
 
 
-    val numThreadsPerTask = 6;
+    val numThreadsPerTask = 4;
     println("number of threads per task: " + numThreadsPerTask)
 
     val aggregatesArray = new Array[Array[A]](numThreadsPerTask)
@@ -497,10 +506,13 @@ class EdgePartition[
     val finalAggregates = aggregatesArray.par.reduce((x, y) => (x, y).zipped.map(mergeMsg))
     val finalBitset = bitsetArray.par.reduce((x, y) => x | y)
 
+
+
+    val output = finalBitset.iterator.map { localId => (local2global(localId), finalAggregates(localId)) }
+
     val t2 = System.nanoTime()
     println("Final Reduction Elapsed time: " + (t2 - t1)/1000000 + "ms")
-
-    finalBitset.iterator.map { localId => (local2global(localId), finalAggregates(localId)) }
+    output
   }
 
   /**
@@ -519,6 +531,8 @@ class EdgePartition[
       mergeMsg: (A, A) => A,
       tripletFields: TripletFields,
       activeness: EdgeActiveness): Iterator[(VertexId, A)] = {
+
+    val t0 = System.nanoTime()
 
 
     val aggregates = new Array[A](vertexAttrs.length)
@@ -564,7 +578,13 @@ class EdgePartition[
       }
     }
 
-    bitset.iterator.map { localId => (local2global(localId), aggregates(localId)) }
+    val output = bitset.iterator.map { localId => (local2global(localId), aggregates(localId)) }
+
+    println("sequential AggregateMessagesIndexScan workers finished!")
+    val t1 = System.nanoTime()
+    println("Elapsed time: " + (t1 - t0)/1000000 + "ms")
+    output
+
   }
 
 
@@ -580,7 +600,7 @@ class EdgePartition[
     val t0 = System.nanoTime()
 
 
-    val numThreadsPerTask = 6;
+    val numThreadsPerTask = 4;
     println("number of threads per task: " + numThreadsPerTask)
 
     val aggregatesArray = new Array[Array[A]](numThreadsPerTask)

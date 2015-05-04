@@ -169,9 +169,19 @@ object PageRank extends Logging {
     // The initial message received by all vertices in PageRank
     val initialMessage = resetProb / (1.0 - resetProb)
 
+    val iterationStartTime = System.nanoTime()
+
     // Execute a dynamic version of Pregel.
-    Pregel(pagerankGraph, initialMessage, Int.MaxValue, useParallel,  activeDirection = EdgeDirection.Out)(
+    val output = Pregel(pagerankGraph, initialMessage, Int.MaxValue, useParallel,  activeDirection = EdgeDirection.Out)(
       vertexProgram, sendMessage, messageCombiner)
       .mapVertices((vid, attr) => attr._1)
+
+    val iterationTimeInSeconds = (System.nanoTime() - iterationStartTime) / 1e9
+    logInfo(s"Iterations took " + "%.3f".format(iterationTimeInSeconds) + " seconds.")
+
+    output
+
   } // end of deltaPageRank
+
+
 }

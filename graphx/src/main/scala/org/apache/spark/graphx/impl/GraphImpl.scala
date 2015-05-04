@@ -211,7 +211,9 @@ class GraphImpl[VD: ClassTag, ED: ClassTag] protected (
     val mapUsesDstAttr = accessesVertexAttr(mapFunc, "dstAttr")
     val tripletFields = new TripletFields(mapUsesSrcAttr, mapUsesDstAttr, true)
 
+
     aggregateMessagesWithActiveSet(sendMsg, reduceFunc, tripletFields, activeSetOpt, useParallel)
+    
   }
 
   override def aggregateMessagesWithActiveSet[A: ClassTag](
