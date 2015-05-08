@@ -32,7 +32,7 @@ def test(numThreadsArray, numClustersArray, numSlicesArray):
         sparkThread.start()
         time.sleep(2)
         jstatRaw = outputdir + "jstatRaw.csv"
-        jstatCommand = "jstat -gc `jps -l | grep SparkSubmit | awk {'print $1'}` 1000" + ">>" + jstatRaw
+        jstatCommand = "jstat -gc `jps -l | grep SparkSubmit | awk {'print $1'}` 1000" + ">" + jstatRaw
         os.system(jstatCommand)
         os.system("python ./scripts/parse-mxbeans-heap.py " + outputFileName + ">>" + finalOutputFile)
         os.system("python ./scripts/parse-jstat-heap.py " + jstatRaw + ">>" + finalOutputFile)
@@ -70,7 +70,7 @@ def testMultithreaded(numThreadsArray, numClustersArray, numSlicesArray, numThre
           sparkThread.start()
           time.sleep(2)
           jstatRaw = outputdir + "jstatRaw.csv"
-          jstatCommand = "jstat -gc `jps -l | grep SparkSubmit | awk {'print $1'}` 1000" + ">>" + jstatRaw
+          jstatCommand = "jstat -gc `jps -l | grep SparkSubmit | awk {'print $1'}` 1000" + ">" + jstatRaw
           os.system(jstatCommand)
           os.system("python ./scripts/parse-mxbeans-heap.py " + outputFileName + ">>" + finalOutputFile)
           os.system("python ./scripts/parse-jstat-heap.py " + jstatRaw + ">>" + finalOutputFile)
@@ -78,9 +78,9 @@ def testMultithreaded(numThreadsArray, numClustersArray, numSlicesArray, numThre
 
 #test([6], [3000], [6])
 #test([1], [1000, 2000, 3000], [6])
-test([8],[2000, 4000, 6000],[8])
-test([10],[2000, 4000, 6000],[10])
-testMultithreaded([2],[2000, 4000, 6000],[6],[6])
-testMultithreaded([3],[2000, 4000, 6000],[4],[4])
-testMultithreaded([3],[2000, 4000, 6000],[6],[6])
+test([8],[1000, 3000, 5000],[8])
+test([10],[1000, 3000, 5000],[10])
+testMultithreaded([2],[1000, 3000, 5000],[6],[6])
+testMultithreaded([3],[1000, 3000, 5000],[4],[4])
+testMultithreaded([3],[1000, 3000, 5000],[6],[6])
 #testMultithreaded([2, 4],[6000],[2, 4],[2, 4])
